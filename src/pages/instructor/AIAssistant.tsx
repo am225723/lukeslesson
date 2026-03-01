@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Bot, Send, Sparkles, MessageSquare, Plus, ArrowLeft, Loader2, Zap, Target, Brain, ShieldCheck, Cpu, Globe, Terminal, Settings, Share2, Maximize2, X, ArrowUp, ThumbsUp, ThumbsDown, ChevronRight, PlusCircle, MonitorPlay } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { chatWithAssistant } from "@/lib/gemini";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
@@ -15,26 +15,43 @@ interface Message {
 
 export default function AIAssistant() {
   const navigate = useNavigate();
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "1",
-      role: "assistant",
-      content: "Hello Aleixander! I've analyzed the resources for your meeting with Luke. I'm ready to help with lesson plans, AI topics, or homework generation. What would you like to focus on?",
-      timestamp: "10:23 AM"
-    },
-    {
-      id: "2",
-      role: "user",
-      content: "Can you suggest a practical exercise for explaining Work Automation to a beginner student using Google Pro tools?",
-      timestamp: "10:25 AM"
-    },
-    {
-      id: "3",
-      role: "assistant",
-      content: "Based on the **\"Work Automation Agents\"** module, a \"Report Generator\" activity is recommended.\n\nAsk the student to run the Python script in the Workspace to automate a mock report. This builds intuition for how AI agents handle data entry and email sorting.",
-      timestamp: "10:26 AM"
+  const location = useLocation();
+  const isStudent = location.pathname.startsWith("/student");
+
+  const getInitialMessages = (): Message[] => {
+    if (isStudent) {
+      return [
+        {
+          id: "1",
+          role: "assistant",
+          content: "Hey Luke! I'm your AI learning coach. I can help you understand topics, practice concepts, or prepare for your session with Aleixander. What would you like to work on today?",
+          timestamp: "10:23 AM"
+        }
+      ];
     }
-  ]);
+    return [
+      {
+        id: "1",
+        role: "assistant",
+        content: "Hello Aleixander! I've analyzed the resources for your meeting with Luke. I'm ready to help with lesson plans, AI topics, or homework generation. What would you like to focus on?",
+        timestamp: "10:23 AM"
+      },
+      {
+        id: "2",
+        role: "user",
+        content: "Can you suggest a practical exercise for explaining Work Automation to a beginner student using Google Pro tools?",
+        timestamp: "10:25 AM"
+      },
+      {
+        id: "3",
+        role: "assistant",
+        content: "Based on the **\"Work Automation Agents\"** module, a \"Report Generator\" activity is recommended.\n\nAsk the student to run the Python script in the Workspace to automate a mock report. This builds intuition for how AI agents handle data entry and email sorting.",
+        timestamp: "10:26 AM"
+      }
+    ];
+  };
+
+  const [messages, setMessages] = useState<Message[]>(getInitialMessages());
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -240,11 +257,15 @@ def generate_report(data):
 
       <div className="p-6 bg-slate-950/50 backdrop-blur-xl border-t border-slate-900 relative z-20">
         <div className="flex gap-3 overflow-x-auto pb-4 no-scrollbar">
-          {[
+          {(isStudent ? [
+            { icon: Target, label: "My Goals", text: "Help me refine my learning goals for the next session." },
+            { icon: Zap, label: "Practice", text: "Give me a quick practice exercise on AI automation." },
+            { icon: MessageSquare, label: "Explain", text: "Explain how work automation agents work in simple terms." }
+          ] : [
             { icon: Target, label: "Session Goals", text: "What are the learning goals for my next session?" },
             { icon: Zap, label: "Quick Quiz", text: "Generate a 5-question quiz on AI ethics." },
             { icon: MessageSquare, label: "Feedback", text: "Draft feedback for Luke's latest project." }
-          ].map((action, i) => (
+          ]).map((action, i) => (
             <motion.button 
               whileHover={{ scale: 1.05, backgroundColor: 'rgba(59, 130, 246, 0.1)' }}
               whileTap={{ scale: 0.95 }}

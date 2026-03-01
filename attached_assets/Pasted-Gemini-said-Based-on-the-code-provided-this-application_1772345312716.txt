@@ -1,0 +1,35 @@
+Gemini said
+Based on the code provided, this application is a custom AI-powered 1-on-1 tutoring platform specifically designed for "personalized business automation education".
+
+It acts as a bridge between a student (named Luke in the prototype) and an instructor (Aleixander), using Google's Gemini AI to automatically structure, refine, and assist with the coursework before and during their live sessions.
+
+Here is a detailed breakdown of what the app is supposed to do, split by the two main user roles:
+
+🎓 1. The Student Experience
+The student portal is heavily focused on preparation and personalized curriculum generation.
+
+Goal Setting & Refinement: Before a session starts, the student enters what they want to learn (e.g., "I want to learn how AI can automate my daily workflow").
+
+AI Interaction: Instead of just accepting a vague goal, the app uses an AI Assistant to ask a "single, short, and engaging follow-up question" to force the student to be more specific. Once the student answers, the AI rewrites their goal into a highly actionable learning statement.
+
+Automated Learning Paths: The app takes those refined goals and automatically generates a structured "Learning Path" or agenda for the upcoming session.
+
+👨‍🏫 2. The Instructor Experience
+The instructor portal acts as a command center for managing the student's progress and running the live classes.
+
+Session Dashboard: The instructor can see their upcoming 45-minute session with the student, alongside quick metrics like the student's "Engagement" level and "Goals Met".
+
+AI-Generated Agenda: The dashboard displays a pre-built session agenda (e.g., 10m Review, 20m Core Topic, 15m Action Plan) that the AI generated based on the student's earlier inputs.
+
+Live Tools: The instructor has buttons to immediately launch a video meeting ("Start Meeting") or jump into a shared "Workspace".
+
+🤖 3. The Backend AI Engine (gemini.ts)
+The true core of the app is its AI capabilities, powered by the gemini-2.5-flash model. Behind the scenes, the app does three main things:
+
+Lesson Planning: It takes the student's text goals and converts them into a structured JSON format containing 3-4 specific focus areas, complete with time durations and learning types (Theory, Practical, Tooling, Discussion).
+
+Automated Code Review: If the student submits Python code (likely through the Workspace or Homework modules), the AI can automatically review it and provide constructive feedback on time complexity or syntax.
+
+Instructor Co-Pilot: The AI acts as a chat assistant explicitly instructed to help the instructor "with lesson plans, AI topics, and homework generation".
+
+In short, it is designed to drastically reduce the administrative and prep work for a tutor, while ensuring the student gets a highly customized lesson tailored specifically to what they need that day.

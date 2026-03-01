@@ -26,7 +26,6 @@ export default function GoalBreakdown() {
       if (generatedTopics.length > 0) {
         setTopics(generatedTopics);
       } else {
-        // Fallback data if API fails
         setTopics([
           { title: "Intro to LLMs", description: "Understanding how Large Language Models work and their capabilities for summarization.", type: "Theory", duration: 15 },
           { title: "Workflow Automation", description: "Connecting AI tools to your daily apps (Email, Slack, Calendar) to automate repetitive tasks.", type: "Practical", duration: 25 },
@@ -37,7 +36,7 @@ export default function GoalBreakdown() {
     };
 
     fetchTopics();
-  }, [goals]);
+  }, []);
 
   const getIconForTopic = (index: number) => {
     switch (index % 3) {
