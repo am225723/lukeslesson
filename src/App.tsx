@@ -5,6 +5,7 @@
 
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "sonner";
+import { SessionProvider } from "./context/SessionContext";
 import { MobileLayout } from "./components/layout/MobileLayout";
 import Home from "./pages/Home";
 import GoalEntry from "./pages/student/GoalEntry";
@@ -22,6 +23,7 @@ import Workspace from "./pages/shared/Workspace";
 
 export default function App() {
   return (
+    <SessionProvider>
     <BrowserRouter>
       <Toaster position="top-center" richColors />
       <Routes>
@@ -49,5 +51,6 @@ export default function App() {
         </Route>
       </Routes>
     </BrowserRouter>
+    </SessionProvider>
   );
 }

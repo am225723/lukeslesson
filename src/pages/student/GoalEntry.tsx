@@ -4,6 +4,7 @@ import { Sparkles, GraduationCap, Calendar, Plus, Trash2, Bot, ArrowRight, Loade
 import { chatWithAssistant } from "@/lib/gemini";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
+import { useSession } from "@/context/SessionContext";
 
 interface Goal {
   text: string;
@@ -15,6 +16,7 @@ interface Goal {
 
 export default function GoalEntry() {
   const navigate = useNavigate();
+  const { setGoals: setContextGoals } = useSession();
   const [goals, setGoals] = useState<Goal[]>([{ text: "", isRefining: false, aiQuestion: "", userAnswer: "", isAiLoading: false }]);
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -22,7 +24,7 @@ export default function GoalEntry() {
     const validGoals = goals.filter(g => g.text.trim() !== "").map(g => g.text);
     if (validGoals.length === 0) return;
     setIsGenerating(true);
-    // Simulate API call
+    setContextGoals(validGoals);
     setTimeout(() => {
       navigate("/student/goal-breakdown", { state: { goals: validGoals } });
     }, 1500);

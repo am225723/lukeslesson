@@ -4,6 +4,7 @@ import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea
 import { GripVertical, AlertCircle, PlusCircle, ArrowRight, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
+import { useSession } from "@/context/SessionContext";
 
 interface Topic {
   id: string;
@@ -15,18 +16,25 @@ interface Topic {
 export default function TopicPreferences() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { topics: contextTopics, setTopicOrder } = useSession();
   
-  const initialTopics = location.state?.topics?.map((t: any, i: number) => ({
-    id: `topic-${i}`,
-    title: t.title,
-    description: t.description,
-    type: t.type
-  })) || [
+  const fallbackTopics = [
     { id: "t1", title: "Work Automation", description: "Creating automation for report making, agents, and launching apps.", type: "Core" },
     { id: "t2", title: "Personalizing Gemini", description: "Teaching Gemini about your business and creating custom Gems/Opal.", type: "Advanced" },
     { id: "t3", title: "Code Assistants", description: "Using Jules.google, ChatGPT, and Codex for development.", type: "Discussion" },
     { id: "t4", title: "Microsoft Integration", description: "Integrating Google AI tools with Windows and Microsoft workflows.", type: "Lab" },
   ];
+
+  const initialTopics = (contextTopics.length > 0
+    ? contextTopics.map((t, i) => ({ id: t.id || `topic-${i}`, title: t.title, description: t.description, type: t.type }))
+    : null)
+    || location.state?.topics?.map((t: any, i: number) => ({
+      id: `topic-${i}`,
+      title: t.title,
+      description: t.description,
+      type: t.type
+    }))
+    || fallbackTopics;
 
   const [topics, setTopics] = useState<Topic[]>(initialTopics);
 
@@ -167,7 +175,10 @@ export default function TopicPreferences() {
         <motion.button 
           whileHover={{ scale: 1.02, y: -2 }}
           whileTap={{ scale: 0.98 }}
-          onClick={() => navigate("/student/homework")}
+          onClick={() => {
+            setTopicOrder(topics.map(t => t.id));
+            navigate("/student/homework");
+          }}
           className="w-full py-5 mt-6 bg-white text-black rounded-[2rem] hover:bg-white/90 transition-all flex items-center justify-center gap-3 font-bold text-xs uppercase tracking-[0.2em] active:scale-[0.98]"
         >
           Confirm Priorities

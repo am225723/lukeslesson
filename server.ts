@@ -34,6 +34,17 @@ print(generate_report(tasks))`,
   chat: []
 };
 
+interface ConnectedUser {
+  socketId: string;
+  name: string;
+  role: "student" | "instructor";
+  color: string;
+  joinedAt: string;
+}
+
+const connectedUsers: Map<string, ConnectedUser> = new Map();
+const typingUsers: Map<string, NodeJS.Timeout> = new Map();
+
 async function startServer() {
   const app = express();
   const httpServer = createServer(app);
@@ -46,13 +57,54 @@ async function startServer() {
   io.on("connection", (socket) => {
     console.log("User connected:", socket.id);
 
-    // Send current state to newly connected user
     socket.emit("workspace:load", workspaceState);
 
+    socket.on("user:join", (data: { name: string; role: "student" | "instructor" }) => {
+      const user: ConnectedUser = {
+        socketId: socket.id,
+        name: data.name,
+        role: data.role,
+        color: data.role === "student" ? "#3b82f6" : "#a855f7",
+        joinedAt: new Date().toISOString(),
+      };
+      connectedUsers.set(socket.id, user);
+      io.emit("users:update", Array.from(connectedUsers.values()));
+    });
+
+    socket.on("user:typing", (isTyping: boolean) => {
+      const user = connectedUsers.get(socket.id);
+      if (!user) return;
+
+      if (typingUsers.has(socket.id)) {
+        clearTimeout(typingUsers.get(socket.id)!);
+        typingUsers.delete(socket.id);
+      }
+
+      if (isTyping) {
+        socket.broadcast.emit("user:typing", { name: user.name, role: user.role, isTyping: true });
+        const timeout = setTimeout(() => {
+          socket.broadcast.emit("user:typing", { name: user.name, role: user.role, isTyping: false });
+          typingUsers.delete(socket.id);
+        }, 3000);
+        typingUsers.set(socket.id, timeout);
+      } else {
+        socket.broadcast.emit("user:typing", { name: user.name, role: user.role, isTyping: false });
+      }
+    });
+
+    socket.on("cursor:move", (data: { line: number; ch: number }) => {
+      const user = connectedUsers.get(socket.id);
+      if (!user) return;
+      socket.broadcast.emit("cursor:move", {
+        name: user.name,
+        role: user.role,
+        color: user.color,
+        line: data.line,
+        ch: data.ch,
+      });
+    });
+
     socket.on("draw:line", (data) => {
-      // If the line already exists (based on some ID or just by replacing the last line if it's currently drawing),
-      // For simplicity, we'll just append it. But to avoid exponential growth, clients should emit 'draw:end' or we just sync the whole state.
-      // Let's change this to sync the whole lines array from the client to be safe and simple.
     });
 
     socket.on("draw:sync", (lines) => {
@@ -82,6 +134,12 @@ async function startServer() {
 
     socket.on("disconnect", () => {
       console.log("User disconnected:", socket.id);
+      connectedUsers.delete(socket.id);
+      if (typingUsers.has(socket.id)) {
+        clearTimeout(typingUsers.get(socket.id)!);
+        typingUsers.delete(socket.id);
+      }
+      io.emit("users:update", Array.from(connectedUsers.values()));
     });
   });
 
@@ -90,6 +148,35 @@ async function startServer() {
   
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
+  });
+
+  app.post("/api/ai-suggestions", async (req, res) => {
+    const { goals } = req.body;
+    if (!goals || !Array.isArray(goals) || goals.length === 0) {
+      return res.status(400).json({ suggestions: [] });
+    }
+    try {
+      const { GoogleGenAI } = await import("@google/genai");
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
+        return res.status(500).json({ error: "GEMINI_API_KEY not configured" });
+      }
+      const ai = new GoogleGenAI({ apiKey });
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: `Based on these student learning goals, suggest 4-5 concise talking points an instructor should cover in a tutoring session. Return ONLY a JSON array of strings, each being one talking point (1-2 sentences max).
+
+Goals:
+${goals.map((g: string) => `- ${g}`).join("\n")}`,
+      });
+      const text = response.text || "[]";
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      const suggestions = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+      res.json({ suggestions });
+    } catch (e) {
+      console.error("AI suggestions error:", e);
+      res.status(500).json({ error: "Failed to generate suggestions" });
+    }
   });
 
   app.post("/api/execute", (req, res) => {
@@ -146,6 +233,9 @@ async function startServer() {
       server: {
         middlewareMode: true,
         hmr: { server: httpServer },
+        watch: {
+          ignored: ['**/.local/**', '**/.cache/**', '**/node_modules/**'],
+        },
       },
       appType: "spa",
     });

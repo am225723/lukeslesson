@@ -4,6 +4,7 @@ import { Sparkles, Bot, Zap, FileText, Plus, ArrowRight, CheckCircle2, Clock, Ta
 import { generateGoalBreakdown } from "@/lib/gemini";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
+import { useSession } from "@/context/SessionContext";
 
 interface Topic {
   title: string;
@@ -15,7 +16,8 @@ interface Topic {
 export default function GoalBreakdown() {
   const location = useLocation();
   const navigate = useNavigate();
-  const goals: string[] = location.state?.goals || ["I want to learn how AI can automate my daily workflow and help me summarize long documents..."];
+  const { goals: contextGoals, setTopics: setContextTopics } = useSession();
+  const goals: string[] = (contextGoals.length > 0 ? contextGoals : null) || location.state?.goals || ["I want to learn how AI can automate my daily workflow and help me summarize long documents..."];
   const [topics, setTopics] = useState<Topic[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -25,12 +27,15 @@ export default function GoalBreakdown() {
       const generatedTopics = await generateGoalBreakdown(goals);
       if (generatedTopics.length > 0) {
         setTopics(generatedTopics);
+        setContextTopics(generatedTopics.map((t, i) => ({ ...t, id: `topic-${i}` })));
       } else {
-        setTopics([
+        const fallbackTopics = [
           { title: "Intro to LLMs", description: "Understanding how Large Language Models work and their capabilities for summarization.", type: "Theory", duration: 15 },
           { title: "Workflow Automation", description: "Connecting AI tools to your daily apps (Email, Slack, Calendar) to automate repetitive tasks.", type: "Practical", duration: 25 },
           { title: "Document Summarization", description: "Techniques for condensing long reports and PDFs into actionable bullet points.", type: "Tooling", duration: 10 },
-        ]);
+        ];
+        setTopics(fallbackTopics);
+        setContextTopics(fallbackTopics.map((t, i) => ({ ...t, id: `topic-${i}` })));
       }
       setIsLoading(false);
     };

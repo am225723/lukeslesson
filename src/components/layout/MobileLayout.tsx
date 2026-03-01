@@ -2,6 +2,7 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Home, Calendar, Bot, ClipboardList, BookOpen, ArrowLeft, MoreHorizontal, Share, Info, MonitorPlay, Sparkles, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 export function MobileLayout() {
   const location = useLocation();
@@ -88,7 +89,9 @@ export function MobileLayout() {
             transition={{ duration: 0.2, ease: "easeOut" }}
             className="h-full w-full overflow-y-auto"
           >
-            <Outlet />
+            <ErrorBoundary>
+              <Outlet />
+            </ErrorBoundary>
           </motion.div>
         </AnimatePresence>
       </main>

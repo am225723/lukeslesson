@@ -1,10 +1,89 @@
-import { Calendar, Sparkles, Brain, AlertTriangle, Code, FileText, File, Play, ArrowLeft, MoreHorizontal, Share2, Download, Terminal } from "lucide-react";
+import { useState } from "react";
+import { Calendar, Sparkles, Brain, AlertTriangle, Code, FileText, File, Play, ArrowLeft, MoreHorizontal, Share2, Download, Terminal, Clock, Lightbulb, Loader2, Target } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
+import { useSession } from "@/context/SessionContext";
+
+const defaultTalkingPoints = [
+  { icon: Sparkles, color: "blue", title: "Personalizing Gemini & Gems", desc: "Teach Gemini about your business and create custom Gems/Opal for specific tasks.", duration: 15 },
+  { icon: Brain, color: "purple", title: "Work Automation Agents", desc: "Automate report making and launch apps using free Google Pro resources.", duration: 15 },
+  { icon: Code, color: "orange", title: "Code Assistants & Integration", desc: "Using Jules.google, Codex, and integrating with Windows/Microsoft workflows.", duration: 15 },
+];
+
+const typeIcons: Record<string, typeof Sparkles> = {
+  Theory: Brain,
+  Practical: Code,
+  Tooling: Terminal,
+  Discussion: Lightbulb,
+};
+
+const typeColors: Record<string, string> = {
+  Theory: "purple",
+  Practical: "orange",
+  Tooling: "blue",
+  Discussion: "green",
+};
 
 export default function LessonPlan() {
   const navigate = useNavigate();
+  const { goals, topics, topicOrder } = useSession();
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
+
+  const orderedTopics = topicOrder.length > 0
+    ? topicOrder
+        .map((id) => topics.find((t) => t.id === id))
+        .filter(Boolean)
+    : topics;
+
+  const hasStudentTopics = orderedTopics.length > 0;
+  const totalDuration = hasStudentTopics
+    ? orderedTopics.reduce((sum, t) => sum + (t?.duration || 0), 0)
+    : defaultTalkingPoints.reduce((sum, t) => sum + t.duration, 0);
+
+  const colorForIndex = (i: number) => {
+    const colors = ["blue", "purple", "orange", "green", "red"];
+    return colors[i % colors.length];
+  };
+
+  const getColorClasses = (color: string) => {
+    const map: Record<string, { bg: string; text: string; border: string; hoverBorder: string }> = {
+      blue: { bg: "bg-blue-500/20", text: "text-blue-400", border: "border-blue-500/30", hoverBorder: "rgba(59, 130, 246, 0.4)" },
+      purple: { bg: "bg-purple-500/20", text: "text-purple-400", border: "border-purple-500/30", hoverBorder: "rgba(168, 85, 247, 0.4)" },
+      orange: { bg: "bg-orange-500/20", text: "text-orange-400", border: "border-orange-500/30", hoverBorder: "rgba(249, 115, 22, 0.4)" },
+      green: { bg: "bg-green-500/20", text: "text-green-400", border: "border-green-500/30", hoverBorder: "rgba(34, 197, 94, 0.4)" },
+      red: { bg: "bg-red-500/20", text: "text-red-400", border: "border-red-500/30", hoverBorder: "rgba(239, 68, 68, 0.4)" },
+    };
+    return map[color] || map.blue;
+  };
+
+  const fetchAiSuggestions = async () => {
+    if (goals.length === 0) return;
+    setLoadingSuggestions(true);
+    setSuggestionsError(null);
+    try {
+      const response = await fetch("/api/ai-suggestions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ goals }),
+      });
+      if (!response.ok) throw new Error("Failed to fetch suggestions");
+      const data = await response.json();
+      setAiSuggestions(data.suggestions || []);
+    } catch {
+      setSuggestionsError("Could not generate suggestions. Try again later.");
+      setAiSuggestions([
+        `Explore how "${goals[0]}" connects to real-world AI workflows`,
+        "Discuss ethical considerations around AI automation in the workplace",
+        "Live demo: build a quick prototype using AI-assisted coding tools",
+        "Review best practices for prompt engineering with practical examples",
+      ]);
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  };
 
   return (
     <motion.div 
@@ -13,7 +92,6 @@ export default function LessonPlan() {
       exit={{ opacity: 0 }}
       className="flex-1 overflow-y-auto flex flex-col w-full max-w-md mx-auto pb-24 h-full bg-[#0A0A0A] text-white relative"
     >
-      {/* Dark Luxury / Atmospheric Background */}
       <div className="absolute top-0 left-0 w-full h-[500px] bg-gradient-to-b from-blue-600/10 via-[#0A0A0A] to-transparent -z-10 pointer-events-none" />
       <motion.div 
         animate={{ 
@@ -75,53 +153,181 @@ export default function LessonPlan() {
               ))}
             </div>
             <p className="text-white/40 text-xs font-bold uppercase tracking-widest">
-              Advanced Session • 4 Attendees
+              Advanced Session • {totalDuration} min
             </p>
           </div>
         </motion.div>
       </div>
 
+      {hasStudentTopics && goals.length > 0 && (
+        <div className="px-6 py-4">
+          <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-white/40 mb-4">Luke's Goals</h3>
+          <div className="space-y-2">
+            {goals.map((goal, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.1 + i * 0.05 }}
+                className="flex items-center gap-3 p-3 bg-white/5 rounded-2xl border border-white/10"
+              >
+                <Target className="w-4 h-4 text-blue-400 shrink-0" />
+                <span className="text-sm text-white/70">{goal}</span>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="px-6 py-4">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-white/40">Talking Points</h3>
+          <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-white/40">
+            {hasStudentTopics ? "Luke's Agenda" : "Talking Points"}
+          </h3>
           <motion.span 
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="text-[10px] font-bold uppercase tracking-widest text-blue-400 bg-blue-500/20 px-3 py-1.5 rounded-xl flex items-center gap-1.5 border border-blue-500/30"
+            className={cn(
+              "text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-xl flex items-center gap-1.5 border",
+              hasStudentTopics
+                ? "text-green-400 bg-green-500/20 border-green-500/30"
+                : "text-blue-400 bg-blue-500/20 border-blue-500/30"
+            )}
           >
-            <Sparkles className="w-3 h-3" /> AI Optimized
+            {hasStudentTopics ? (
+              <><Target className="w-3 h-3" /> Student-Driven</>
+            ) : (
+              <><Sparkles className="w-3 h-3" /> Default Plan</>
+            )}
           </motion.span>
         </div>
 
         <div className="space-y-4">
-          {[
-            { icon: Sparkles, color: "blue", title: "Personalizing Gemini & Gems", desc: "Teach Gemini about your business and create custom Gems/Opal for specific tasks." },
-            { icon: Brain, color: "purple", title: "Work Automation Agents", desc: "Automate report making and launch apps using free Google Pro resources." },
-            { icon: Code, color: "orange", title: "Code Assistants & Integration", desc: "Using Jules.google, Codex, and integrating with Windows/Microsoft workflows." }
-          ].map((point, i) => (
-            <motion.div 
-              key={i}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.2 + i * 0.1 }}
-              whileHover={{ x: 5, backgroundColor: "rgba(255, 255, 255, 0.1)" }}
-              className="group flex gap-5 p-6 bg-white/5 backdrop-blur-md rounded-[2rem] border border-white/10 shadow-sm hover:border-white/20 transition-all cursor-pointer relative overflow-hidden"
-            >
-              <div className={cn(
-                "flex items-center justify-center w-12 h-12 rounded-2xl shrink-0 mt-0.5 border",
-                point.color === "blue" ? "bg-blue-500/20 text-blue-400 border-blue-500/30" : 
-                point.color === "purple" ? "bg-purple-500/20 text-purple-400 border-purple-500/30" : "bg-orange-500/20 text-orange-400 border-orange-500/30"
-              )}>
-                <point.icon className="w-6 h-6" />
-              </div>
-              <div className="flex-1">
-                <h4 className="text-lg font-medium text-white mb-1 tracking-tight group-hover:text-blue-400 transition-colors">{point.title}</h4>
-                <p className="text-sm font-medium text-white/50 leading-relaxed">{point.desc}</p>
-              </div>
-            </motion.div>
-          ))}
+          {hasStudentTopics
+            ? orderedTopics.map((topic, i) => {
+                if (!topic) return null;
+                const color = typeColors[topic.type] || colorForIndex(i);
+                const IconComp = typeIcons[topic.type] || Sparkles;
+                const cc = getColorClasses(color);
+                return (
+                  <motion.div 
+                    key={topic.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.2 + i * 0.1 }}
+                    whileHover={{ x: 5, backgroundColor: "rgba(255, 255, 255, 0.1)" }}
+                    className="group flex gap-5 p-6 bg-white/5 backdrop-blur-md rounded-[2rem] border border-white/10 shadow-sm hover:border-white/20 transition-all cursor-pointer relative overflow-hidden"
+                  >
+                    <div className={cn("flex items-center justify-center w-12 h-12 rounded-2xl shrink-0 mt-0.5 border", cc.bg, cc.text, cc.border)}>
+                      <IconComp className="w-6 h-6" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-1">
+                        <h4 className="text-lg font-medium text-white tracking-tight group-hover:text-blue-400 transition-colors">{topic.title}</h4>
+                        <div className="flex items-center gap-1 text-white/40 shrink-0 ml-2">
+                          <Clock className="w-3.5 h-3.5" />
+                          <span className="text-xs font-bold">{topic.duration}m</span>
+                        </div>
+                      </div>
+                      <p className="text-sm font-medium text-white/50 leading-relaxed">{topic.description}</p>
+                      <span className={cn("inline-block mt-2 text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-lg border", cc.bg, cc.text, cc.border)}>
+                        {topic.type}
+                      </span>
+                    </div>
+                  </motion.div>
+                );
+              })
+            : defaultTalkingPoints.map((point, i) => (
+                <motion.div 
+                  key={i}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.2 + i * 0.1 }}
+                  whileHover={{ x: 5, backgroundColor: "rgba(255, 255, 255, 0.1)" }}
+                  className="group flex gap-5 p-6 bg-white/5 backdrop-blur-md rounded-[2rem] border border-white/10 shadow-sm hover:border-white/20 transition-all cursor-pointer relative overflow-hidden"
+                >
+                  <div className={cn(
+                    "flex items-center justify-center w-12 h-12 rounded-2xl shrink-0 mt-0.5 border",
+                    point.color === "blue" ? "bg-blue-500/20 text-blue-400 border-blue-500/30" : 
+                    point.color === "purple" ? "bg-purple-500/20 text-purple-400 border-purple-500/30" : "bg-orange-500/20 text-orange-400 border-orange-500/30"
+                  )}>
+                    <point.icon className="w-6 h-6" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-1">
+                      <h4 className="text-lg font-medium text-white tracking-tight group-hover:text-blue-400 transition-colors">{point.title}</h4>
+                      <div className="flex items-center gap-1 text-white/40 shrink-0 ml-2">
+                        <Clock className="w-3.5 h-3.5" />
+                        <span className="text-xs font-bold">{point.duration}m</span>
+                      </div>
+                    </div>
+                    <p className="text-sm font-medium text-white/50 leading-relaxed">{point.desc}</p>
+                  </div>
+                </motion.div>
+              ))
+          }
         </div>
       </div>
+
+      {goals.length > 0 && (
+        <div className="px-6 py-6">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-white/40">AI Suggestions</h3>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={fetchAiSuggestions}
+              disabled={loadingSuggestions}
+              className="text-[10px] font-bold uppercase tracking-widest text-purple-400 bg-purple-500/20 px-3 py-1.5 rounded-xl flex items-center gap-1.5 border border-purple-500/30 hover:bg-purple-500/30 transition-all disabled:opacity-50"
+            >
+              {loadingSuggestions ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+              {loadingSuggestions ? "Generating..." : "Generate"}
+            </motion.button>
+          </div>
+
+          <AnimatePresence mode="wait">
+            {aiSuggestions.length > 0 ? (
+              <motion.div
+                key="suggestions"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="space-y-3"
+              >
+                {aiSuggestions.map((suggestion, i) => (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.08 }}
+                    className="flex gap-3 p-4 bg-purple-500/10 backdrop-blur-md rounded-2xl border border-purple-500/20"
+                  >
+                    <Lightbulb className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+                    <p className="text-sm text-white/70 leading-relaxed">{suggestion}</p>
+                  </motion.div>
+                ))}
+                {suggestionsError && (
+                  <p className="text-[10px] text-white/30 text-center uppercase tracking-widest mt-2">
+                    Showing fallback suggestions
+                  </p>
+                )}
+              </motion.div>
+            ) : (
+              <motion.div
+                key="empty"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="p-6 bg-white/5 rounded-[2rem] border border-white/10 text-center"
+              >
+                <Sparkles className="w-8 h-8 text-purple-400/40 mx-auto mb-3" />
+                <p className="text-sm text-white/40">
+                  Tap "Generate" to get AI-powered talking points based on Luke's goals
+                </p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
 
       <div className="px-6 py-6">
         <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-white/40 mb-6">Interactive Demo</h3>

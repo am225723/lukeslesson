@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
 import { Stage, Layer, Line } from "react-konva";
-import { Play, Bot, AlertTriangle, Code2, PenTool, Eraser, Loader2, MessageSquare, ArrowUp, Save, Download, ClipboardList, CheckCircle2, Sparkles, Briefcase, FileSpreadsheet, X, Terminal, Maximize2, Settings, Share2 } from "lucide-react";
+import { Play, Bot, AlertTriangle, Code2, PenTool, Eraser, Loader2, MessageSquare, ArrowUp, Save, Download, ClipboardList, CheckCircle2, Sparkles, Briefcase, FileSpreadsheet, X, Terminal, Maximize2, Settings, Share2, Users, Circle } from "lucide-react";
 import { chatWithAssistant } from "@/lib/gemini";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
@@ -18,6 +18,30 @@ interface ChatMessage {
   sender: "user" | "instructor" | "ai";
   text: string;
   timestamp: string;
+  role?: "student" | "instructor";
+  senderName?: string;
+}
+
+interface ConnectedUser {
+  socketId: string;
+  name: string;
+  role: "student" | "instructor";
+  color: string;
+  joinedAt: string;
+}
+
+interface TypingIndicator {
+  name: string;
+  role: "student" | "instructor";
+  isTyping: boolean;
+}
+
+interface RemoteCursor {
+  name: string;
+  role: string;
+  color: string;
+  line: number;
+  ch: number;
 }
 
 interface Activity {
@@ -91,6 +115,10 @@ export default function Workspace() {
   const [completedActivities, setCompletedActivities] = useState<string[]>([]);
   const [showContextModal, setShowContextModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [connectedUsers, setConnectedUsers] = useState<ConnectedUser[]>([]);
+  const [typingIndicators, setTypingIndicators] = useState<Map<string, TypingIndicator>>(new Map());
+  const [remoteCursors, setRemoteCursors] = useState<Map<string, RemoteCursor>>(new Map());
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [settings, setSettings] = useState({
     theme: "dark",
     fontSize: 14,
@@ -101,6 +129,9 @@ export default function Workspace() {
     industry: "E-commerce",
     tone: "Professional yet friendly"
   });
+
+  const userRole = window.location.pathname.includes("instructor") ? "instructor" : "student";
+  const userName = userRole === "student" ? "Luke" : "Aleixander";
 
   // Code Editor State
   const [code, setCode] = useState(`import json
@@ -144,17 +175,43 @@ print(generate_report(tasks))`);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Connect to Socket.io
     const newSocket = io();
     setSocket(newSocket);
 
-    newSocket.on("connect", () => setIsConnected(true));
+    newSocket.on("connect", () => {
+      setIsConnected(true);
+      newSocket.emit("user:join", { name: userName, role: userRole });
+    });
     newSocket.on("disconnect", () => setIsConnected(false));
 
     newSocket.on("workspace:load", (state: any) => {
       if (state.code) setCode(state.code);
       if (state.lines) setLines(state.lines);
       if (state.chat) setChatMessages(state.chat);
+    });
+
+    newSocket.on("users:update", (users: ConnectedUser[]) => {
+      setConnectedUsers(users);
+    });
+
+    newSocket.on("user:typing", (data: TypingIndicator) => {
+      setTypingIndicators(prev => {
+        const next = new Map(prev);
+        if (data.isTyping) {
+          next.set(data.name, data);
+        } else {
+          next.delete(data.name);
+        }
+        return next;
+      });
+    });
+
+    newSocket.on("cursor:move", (data: RemoteCursor) => {
+      setRemoteCursors(prev => {
+        const next = new Map(prev);
+        next.set(data.name, data);
+        return next;
+      });
     });
 
     newSocket.on("draw:sync", (newLines: DrawLine[]) => {
@@ -200,11 +257,21 @@ print(generate_report(tasks))`);
     }
   }, [chatMessages, activeTab]);
 
+  const emitTyping = useCallback((isTyping: boolean) => {
+    if (!socket) return;
+    socket.emit("user:typing", isTyping);
+  }, [socket]);
+
   const handleCodeChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newCode = e.target.value;
     setCode(newCode);
     if (socket) {
       socket.emit("code:update", newCode);
+      const textarea = e.currentTarget;
+      const textBeforeCursor = textarea.value.substring(0, textarea.selectionStart);
+      const lineNumber = textBeforeCursor.split("\n").length;
+      const ch = textBeforeCursor.split("\n").pop()?.length || 0;
+      socket.emit("cursor:move", { line: lineNumber, ch });
     }
   };
 
@@ -280,14 +347,28 @@ print(generate_report(tasks))`);
     toast.info("Workspace state is automatically loaded when you connect.");
   };
 
+  const handleChatInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setChatInput(e.target.value);
+    if (socket) {
+      emitTyping(true);
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(() => emitTyping(false), 2000);
+    }
+  };
+
   const sendChatMessage = async () => {
     if (!chatInput.trim() || !socket) return;
 
+    emitTyping(false);
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
-      sender: "user", // or instructor based on role, hardcoded to user for demo
+      sender: userRole === "instructor" ? "instructor" : "user",
       text: chatInput,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      role: userRole as "student" | "instructor",
+      senderName: userName,
     };
 
     setChatMessages(prev => [...prev, userMsg]);
@@ -560,6 +641,29 @@ print(generate_report(tasks))`);
                 {isConnected ? "Live Session Active" : "Connecting..."}
               </span>
             </div>
+          </div>
+          <div className="flex items-center gap-3">
+            {connectedUsers.length > 0 && (
+              <div className="flex items-center gap-2 bg-slate-900/80 border border-slate-800 rounded-2xl px-3 py-2">
+                <Users className="w-3.5 h-3.5 text-slate-500" />
+                <div className="flex -space-x-2">
+                  {connectedUsers.map((user) => (
+                    <div
+                      key={user.socketId}
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-black text-white border-2 border-slate-950 relative"
+                      style={{ backgroundColor: user.color }}
+                      title={`${user.name} (${user.role})`}
+                    >
+                      {user.name[0]}
+                      <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-slate-950" />
+                    </div>
+                  ))}
+                </div>
+                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                  {connectedUsers.length} online
+                </span>
+              </div>
+            )}
           </div>
           <div className="flex gap-3">
             <motion.button 
@@ -840,9 +944,20 @@ print(generate_report(tasks))`);
                       msg.sender === "ai" ? "bg-gradient-to-br from-blue-600 to-indigo-600 text-white" : 
                       msg.sender === "instructor" ? "bg-purple-600 text-white" : "bg-slate-800 text-slate-400 border border-slate-700"
                     )}>
-                      {msg.sender === "ai" ? <Bot className="w-5 h-5" /> : <span className="text-xs font-black">{msg.sender[0].toUpperCase()}</span>}
+                      {msg.sender === "ai" ? <Bot className="w-5 h-5" /> : <span className="text-xs font-black">{msg.senderName ? msg.senderName[0] : msg.sender[0].toUpperCase()}</span>}
                     </div>
                     <div className={`flex flex-col gap-2 max-w-[80%] ${msg.sender === "user" ? "items-end" : ""}`}>
+                      {msg.senderName && (
+                        <div className={`flex items-center gap-2 mx-2 ${msg.sender === "user" ? "flex-row-reverse" : ""}`}>
+                          <span className="text-[10px] font-black text-slate-400">{msg.senderName}</span>
+                          <span className={cn(
+                            "text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full",
+                            msg.role === "instructor" ? "bg-purple-500/20 text-purple-400" : "bg-blue-500/20 text-blue-400"
+                          )}>
+                            {msg.role === "instructor" ? "Instructor" : "Student"}
+                          </span>
+                        </div>
+                      )}
                       <div className={cn(
                         "p-4 text-sm font-medium leading-relaxed shadow-xl",
                         msg.sender === "user" ? "bg-blue-600 text-white rounded-[1.5rem] rounded-tr-sm" : 
@@ -852,6 +967,30 @@ print(generate_report(tasks))`);
                         <p className="whitespace-pre-wrap">{msg.text}</p>
                       </div>
                       <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 mx-2">{msg.timestamp}</span>
+                    </div>
+                  </motion.div>
+                ))}
+                {Array.from(typingIndicators.values()).map((indicator) => (
+                  <motion.div
+                    key={`typing-${indicator.name}`}
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -5 }}
+                    className="flex items-center gap-3 px-2"
+                  >
+                    <div
+                      className="w-6 h-6 rounded-full flex items-center justify-center text-[8px] font-black text-white"
+                      style={{ backgroundColor: indicator.role === "instructor" ? "#a855f7" : "#3b82f6" }}
+                    >
+                      {indicator.name[0]}
+                    </div>
+                    <div className="flex items-center gap-1.5 bg-slate-800/60 border border-slate-700/50 px-3 py-2 rounded-full">
+                      <span className="text-[10px] font-bold text-slate-400">{indicator.name} is typing</span>
+                      <div className="flex gap-0.5">
+                        <div className="w-1 h-1 bg-slate-400 rounded-full animate-bounce" />
+                        <div className="w-1 h-1 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "0.15s" }} />
+                        <div className="w-1 h-1 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "0.3s" }} />
+                      </div>
                     </div>
                   </motion.div>
                 ))}
@@ -875,7 +1014,7 @@ print(generate_report(tasks))`);
                   <input
                     type="text"
                     value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
+                    onChange={handleChatInputChange}
                     onKeyDown={(e) => e.key === 'Enter' && sendChatMessage()}
                     placeholder="Type a message or @AI..."
                     className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-bold px-3 outline-none text-white placeholder:text-slate-600"
