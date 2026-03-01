@@ -40,7 +40,7 @@ async function startServer() {
   const io = new Server(httpServer, {
     cors: { origin: "*" }
   });
-  const PORT = 3000;
+  const PORT = 5000;
 
   // Socket.io logic
   io.on("connection", (socket) => {
